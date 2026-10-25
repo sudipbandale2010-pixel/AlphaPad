@@ -1,0 +1,218 @@
+#include <Wire.h>
+#include <Keyboard.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+// =====================================
+// XIAO 3x3 USB MACROPAD
+// Board: Seeeduino XIAO SAMD21
+// OLED: 0.96 inch SSD1306, 128x64
+// =====================================
+
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET -1
+#define OLED_ADDRESS 0x3C
+
+Adafruit_SSD1306 display(
+  SCREEN_WIDTH,
+  SCREEN_HEIGHT,
+  &Wire,
+  OLED_RESET
+);
+
+// Button pins: row by row
+const uint8_t buttonPins[9] = {
+  D0, D1, D2,
+  D3, D6, D7,
+  D8, D9, D10
+};
+
+const char* buttonNames[9] = {
+  "COPY",
+  "PASTE",
+  "UNDO",
+  "SAVE",
+  "RUN / F5",
+  "SCREENSHOT",
+  "ALT + TAB",
+  "MUTE SHORTCUT",
+  "ENTER"
+};
+
+bool lastReading[9];
+bool stableState[9];
+
+unsigned long lastChange[9];
+
+const unsigned long debounceTime = 30;
+
+// =====================================
+// OLED DISPLAY
+// =====================================
+
+void showScreen(const char* action) {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+
+  display.setTextSize(2);
+  display.setCursor(0, 0);
+  display.println("XIAO PAD");
+
+  display.drawLine(0, 20, 127, 20, SSD1306_WHITE);
+
+  display.setTextSize(1);
+  display.setCursor(0, 29);
+  display.println("LAST PRESSED:");
+
+  display.setTextSize(1);
+  display.setCursor(0, 44);
+  display.println(action);
+
+  display.display();
+}
+
+// =====================================
+// EXECUTE MACRO
+// =====================================
+
+void executeAction(uint8_t index) {
+  showScreen(buttonNames[index]);
+
+  switch (index) {
+
+    // Button 1: Copy
+    case 0:
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press('c');
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 2: Paste
+    case 1:
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press('v');
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 3: Undo
+    case 2:
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press('z');
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 4: Save
+    case 3:
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press('s');
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 5: Run / F5
+    case 4:
+      Keyboard.press(KEY_F5);
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 6: Windows screenshot
+    case 5:
+      Keyboard.press(KEY_LEFT_GUI);
+      Keyboard.press(KEY_LEFT_SHIFT);
+      Keyboard.press('s');
+      delay(100);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 7: Alt + Tab
+    case 6:
+      Keyboard.press(KEY_LEFT_ALT);
+      Keyboard.press(KEY_TAB);
+      delay(150);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 8: Ctrl + Shift + M
+    // Application-dependent mute shortcut
+    case 7:
+      Keyboard.press(KEY_LEFT_CTRL);
+      Keyboard.press(KEY_LEFT_SHIFT);
+      Keyboard.press('m');
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+
+    // Button 9: Enter
+    case 8:
+      Keyboard.press(KEY_RETURN);
+      delay(50);
+      Keyboard.releaseAll();
+      break;
+  }
+}
+
+// =====================================
+// SETUP
+// =====================================
+
+void setup() {
+  // Configure all buttons
+  for (uint8_t i = 0; i < 9; i++) {
+    pinMode(buttonPins[i], INPUT_PULLUP);
+
+    lastReading[i] = HIGH;
+    stableState[i] = HIGH;
+    lastChange[i] = 0;
+  }
+
+  // Initialize OLED using I2C: SDA D4, SCL D5
+  Wire.begin();
+
+  if (!display.begin(
+        SSD1306_SWITCHCAPVCC,
+        OLED_ADDRESS)) {
+    while (true) {
+      // Stop if OLED initialization fails
+    }
+  }
+
+  showScreen("READY");
+
+  // Enable USB keyboard
+  Keyboard.begin();
+}
+
+// =====================================
+// MAIN LOOP
+// =====================================
+
+void loop() {
+  for (uint8_t i = 0; i < 9; i++) {
+
+    bool reading = digitalRead(buttonPins[i]);
+
+    // Detect change in raw button state
+    if (reading != lastReading[i]) {
+      lastChange[i] = millis();
+      lastReading[i] = reading;
+    }
+
+    // Debounce
+    if (millis() - lastChange[i] >= debounceTime) {
+
+      if (reading != stableState[i]) {
+        stableState[i] = reading;
+
+        // LOW means button pressed
+        if (stableState[i] == LOW) {
+          executeAction(i);
+        }
+      }
+    }
+  }
+}
